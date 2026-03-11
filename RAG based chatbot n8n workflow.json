@@ -1,0 +1,408 @@
+{
+  "name": "My workflow 2",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "851037fb-460a-48a4-98c6-a39e7b47bf61",
+      "name": "Chat Trigger",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        208
+      ],
+      "webhookId": "rag-chatbot-webhook-001"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a helpful AI assistant. Use the provided context from the knowledge base to answer questions accurately and concisely. If the context does not contain enough information to answer the question, say so honestly. Always base your answers on the retrieved context."
+        }
+      },
+      "id": "9f4bde82-b2df-4116-87ff-3c0c66e3f708",
+      "name": "RAG Chatbot",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        272,
+        -16
+      ]
+    },
+    {
+      "parameters": {
+        "model": "moonshotai/kimi-k2-instruct-0905",
+        "options": {
+          "temperature": 0.3
+        }
+      },
+      "id": "ec065b0c-f23f-412d-ac68-decfae0a2dc5",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        224,
+        224
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "q1T0SAPdsxJ7kmuB",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Chat Trigger').item.json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "id": "9dd5d950-7f45-4dfd-902f-5d4098f1acaa",
+      "name": "Window Buffer Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        352,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolName": "KnowledgeBase",
+        "toolDescription": "Searches the knowledge base to find relevant document chunks for answering user questions. Use this tool whenever the user asks a question that may be answered from uploaded documents.",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "rag-chatbot",
+          "mode": "list",
+          "cachedResultName": "rag-chatbot"
+        },
+        "options": {}
+      },
+      "id": "c15553d4-f1e8-4349-937d-8f9eab636d6e",
+      "name": "Pinecone Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1,
+      "position": [
+        480,
+        224
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "mzS3dcPUcqMMdvKY",
+          "name": "PineconeApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "formTitle": "Upload Document to Knowledge Base",
+        "formDescription": "Upload a PDF, TXT, or DOCX file to add it to the RAG knowledge base. The document will be automatically chunked and stored in Pinecone.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Document File",
+              "fieldType": "file",
+              "multipleFiles": false,
+              "acceptFileTypes": ".pdf,.txt,.docx,.csv",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Document Description (optional)",
+              "placeholder": "e.g. Company HR Policy 2024"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "7f41ecb1-d204-4065-a1db-56b44d4b9400",
+      "name": "Upload Document Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -160,
+        704
+      ],
+      "webhookId": "191ce4a6-f886-42bf-8f7e-fa86021c3aa0"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract uploaded file and metadata from form submission\nconst formData = $input.first().json;\nconst binaryData = $input.first().binary;\n\n// Get the uploaded file\nconst fileKey = Object.keys(binaryData || {})[0];\n\nif (!fileKey) {\n  throw new Error('No file was uploaded. Please upload a PDF, TXT, or DOCX file.');\n}\n\nconst file = binaryData[fileKey];\nconst description = formData['Document Description (optional)'] || 'No description provided';\nconst fileName = file.fileName || 'unknown_file';\n\nconsole.log(`Processing file: ${fileName}`);\n\nreturn [{\n  json: {\n    fileName,\n    fileDescription: description,\n    mimeType: file.mimeType,\n    uploadedAt: new Date().toISOString()\n  },\n  binary: {\n    data: file\n  }\n}];"
+      },
+      "id": "dee763ab-d830-4bbf-8ba1-e916771a66b5",
+      "name": "Prepare File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        32,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "source",
+                "value": "={{ $json.fileName }}"
+              },
+              {
+                "name": "description",
+                "value": "={{ $json.fileDescription }}"
+              },
+              {
+                "name": "uploadedAt",
+                "value": "={{ $json.uploadedAt }}"
+              }
+            ]
+          }
+        }
+      },
+      "id": "b4230671-f986-4da2-a872-a764d1920e38",
+      "name": "Default Data Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1,
+      "position": [
+        384,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "chunkSize": 500,
+        "chunkOverlap": 50,
+        "options": {}
+      },
+      "id": "0cec6f4f-4091-4c75-8d58-0aeb58759c8b",
+      "name": "Recursive Text Splitter",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        384,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "pineconeIndex": {
+          "__rl": true,
+          "value": "rag-chatbot",
+          "mode": "list",
+          "cachedResultName": "rag-chatbot"
+        },
+        "options": {
+          "clearNamespace": false
+        }
+      },
+      "id": "413b86f9-661e-4b01-8836-a334fda36472",
+      "name": "Pinecone Insert Documents",
+      "type": "@n8n/n8n-nodes-langchain.vectorStorePinecone",
+      "typeVersion": 1,
+      "position": [
+        224,
+        704
+      ],
+      "credentials": {
+        "pineconeApi": {
+          "id": "mzS3dcPUcqMMdvKY",
+          "name": "PineconeApi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "completion",
+        "completionTitle": "✅ Document Uploaded Successfully!",
+        "completionMessage": "Your document has been processed and added to the knowledge base.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.form",
+      "typeVersion": 2.5,
+      "position": [
+        560,
+        704
+      ],
+      "id": "cc53cf4e-ada7-40f6-af3b-5b4a6df8546c",
+      "name": "Form",
+      "webhookId": "e23dc5ab-bc69-419d-9c87-da8a030173af"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        224,
+        944
+      ],
+      "id": "6c5bbffd-bc39-4364-97c0-a043e9cda422",
+      "name": "Embeddings OpenAI",
+      "credentials": {
+        "openAiApi": {
+          "id": "3ytFZjhqmP4pjOoz",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        560,
+        432
+      ],
+      "id": "d1d0bf79-4bb8-43ca-88bb-3e0c8f809606",
+      "name": "Embeddings OpenAI1",
+      "credentials": {
+        "openAiApi": {
+          "id": "3ytFZjhqmP4pjOoz",
+          "name": "OpenAi account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Chat Trigger": {
+      "main": [
+        [
+          {
+            "node": "RAG Chatbot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "RAG Chatbot",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Buffer Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "RAG Chatbot",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Vector Store": {
+      "ai_tool": [
+        [
+          {
+            "node": "RAG Chatbot",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload Document Form": {
+      "main": [
+        [
+          {
+            "node": "Prepare File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare File": {
+      "main": [
+        [
+          {
+            "node": "Pinecone Insert Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Default Data Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Pinecone Insert Documents",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Text Splitter": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Default Data Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pinecone Insert Documents": {
+      "main": [
+        [
+          {
+            "node": "Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Insert Documents",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Embeddings OpenAI1": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Pinecone Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "93b7898e-cd12-4725-815f-23afe505c3ee",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9c59bfcc6838d7a033e8a072f9e679ed5389cd5fff4591146e3f4ae70019d1fa"
+  },
+  "id": "jQHkzpchKE22cVSb",
+  "tags": []
+}
